@@ -1,65 +1,369 @@
-import Image from "next/image";
+import Link from "next/link";
+import { ArrowRight, Play, Trophy, Users, Calendar } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+import { liveMatches, upcomingMatches, completedMatches, featuredSeries } from "@/data/matches";
+import { MATCH_STATUSES } from "@/constants/cricket";
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="flex flex-col">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-primary via-primary/90 to-primary/80 py-16 md:py-24">
+        {/* Background Pattern */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,white_1px,transparent_1px)] bg-[length:40px_40px]" />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="container relative z-10 px-4 md:px-6">
+          <div className="mx-auto max-w-3xl text-center">
+            <Badge variant="secondary" className="mb-4 text-sm">
+              🏏 Live Cricket Coverage
+            </Badge>
+            <h1 className="mb-6 text-4xl font-bold tracking-tight text-primary-foreground md:text-5xl lg:text-6xl">
+              Your Home for{" "}
+              <span className="text-yellow-300">Live Cricket</span>
+            </h1>
+            <p className="mb-8 text-lg text-primary-foreground/80 md:text-xl">
+              Get real-time scores, ball-by-ball commentary, match updates, and
+              comprehensive cricket coverage from around the world.
+            </p>
+            <div className="flex flex-col justify-center gap-4 sm:flex-row">
+              <Button
+                size="lg"
+                variant="secondary"
+                className="gap-2 text-base"
+                asChild
+              >
+                <Link href="/live">
+                  <Play className="h-4 w-4" />
+                  Watch Live Matches
+                </Link>
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="gap-2 border-primary-foreground/30 text-base text-primary-foreground hover:bg-primary-foreground/10"
+                asChild
+              >
+                <Link href="/matches">
+                  View All Matches
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </div>
         </div>
-      </main>
+      </section>
+
+      {/* Live Matches Ticker */}
+      {liveMatches.length > 0 && (
+        <section className="border-b bg-destructive/5 py-3">
+          <div className="container px-4 md:px-6">
+            <div className="flex items-center gap-4 overflow-x-auto">
+              <Badge variant="destructive" className="shrink-0 animate-pulse gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+                </span>
+                LIVE
+              </Badge>
+              <div className="flex gap-6 text-sm">
+                {liveMatches.map((match) => (
+                  <Link
+                    key={match.matchId}
+                    href={`/match/${match.matchId}`}
+                    className="flex shrink-0 items-center gap-2 font-medium hover:text-primary"
+                  >
+                    <span>
+                      {match.team1.shortName} {match.team1.score} vs{" "}
+                      {match.team2.shortName} {match.team2.score || ""}
+                    </span>
+                    <span className="text-muted-foreground">•</span>
+                    <span className="text-muted-foreground">{match.format}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Main Content */}
+      <section className="py-12 md:py-16">
+        <div className="container px-4 md:px-6">
+          <div className="grid gap-8 lg:grid-cols-3">
+            {/* Matches Section - Takes 2 columns */}
+            <div className="lg:col-span-2">
+              <Tabs defaultValue="live" className="w-full">
+                <div className="mb-6 flex items-center justify-between">
+                  <h2 className="text-2xl font-bold tracking-tight">Matches</h2>
+                  <TabsList>
+                    <TabsTrigger value="live" className="gap-1.5">
+                      <span className="relative flex h-2 w-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                      </span>
+                      Live
+                    </TabsTrigger>
+                    <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+                    <TabsTrigger value="results">Results</TabsTrigger>
+                  </TabsList>
+                </div>
+
+                <TabsContent value="live" className="mt-0 space-y-4">
+                  {liveMatches.length > 0 ? (
+                    liveMatches.map((match) => (
+                      <MatchCard key={match.matchId} match={match} />
+                    ))
+                  ) : (
+                    <Card className="p-8 text-center text-muted-foreground">
+                      No live matches at the moment
+                    </Card>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="upcoming" className="mt-0 space-y-4">
+                  {upcomingMatches.map((match) => (
+                    <MatchCard key={match.matchId} match={match} />
+                  ))}
+                </TabsContent>
+
+                <TabsContent value="results" className="mt-0 space-y-4">
+                  {completedMatches.map((match) => (
+                    <MatchCard key={match.matchId} match={match} />
+                  ))}
+                </TabsContent>
+              </Tabs>
+            </div>
+
+            {/* Sidebar - Takes 1 column */}
+            <div className="space-y-6">
+              {/* Featured Series */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Trophy className="h-5 w-5 text-primary" />
+                    Featured Series
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {featuredSeries.map((series) => (
+                    <Link
+                      key={series.id}
+                      href={`/series/${series.id}`}
+                      className="group block rounded-lg border p-3 transition-colors hover:bg-accent"
+                    >
+                      <h4 className="font-medium group-hover:text-primary">
+                        {series.name}
+                      </h4>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {series.currentStatus} • {series.matches} matches
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {series.startDate} - {series.endDate}
+                      </p>
+                    </Link>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Quick Stats */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Users className="h-5 w-5 text-primary" />
+                    Quick Stats
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="rounded-lg bg-muted p-3 text-center">
+                      <p className="text-2xl font-bold text-primary">
+                        {liveMatches.length}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Live Now</p>
+                    </div>
+                    <div className="rounded-lg bg-muted p-3 text-center">
+                      <p className="text-2xl font-bold text-primary">
+                        {upcomingMatches.length}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Upcoming</p>
+                    </div>
+                    <div className="rounded-lg bg-muted p-3 text-center">
+                      <p className="text-2xl font-bold text-primary">
+                        {featuredSeries.length}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Series</p>
+                    </div>
+                    <div className="rounded-lg bg-muted p-3 text-center">
+                      <p className="text-2xl font-bold text-primary">12</p>
+                      <p className="text-xs text-muted-foreground">Teams</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Upcoming Schedule */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Calendar className="h-5 w-5 text-primary" />
+                    Schedule
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    View the complete cricket calendar and never miss a match.
+                  </p>
+                  <Button variant="outline" size="sm" className="mt-4 w-full" asChild>
+                    <Link href="/schedule">View Full Schedule</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="border-t bg-muted/30 py-12 md:py-16">
+        <div className="container px-4 md:px-6">
+          <div className="mx-auto mb-10 max-w-2xl text-center">
+            <h2 className="mb-4 text-3xl font-bold tracking-tight">
+              Everything Cricket, One Place
+            </h2>
+            <p className="text-muted-foreground">
+              From live scores to in-depth analysis, we&apos;ve got you covered.
+            </p>
+          </div>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {features.map((feature, index) => (
+              <Card key={index} className="text-center">
+                <CardContent className="pt-6">
+                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                    {feature.icon}
+                  </div>
+                  <h3 className="mb-2 font-semibold">{feature.title}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {feature.description}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
+
+// Match Card Component
+function MatchCard({ match }: { match: (typeof liveMatches)[0] }) {
+  const statusConfig = MATCH_STATUSES[match.status];
+
+  return (
+    <Link href={`/match/${match.matchId}`}>
+      <Card className="transition-all hover:shadow-md hover:border-primary/30">
+        <CardContent className="p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">
+                {match.format}
+              </Badge>
+              {match.isLive && (
+                <Badge
+                  variant="destructive"
+                  className="animate-pulse gap-1 text-xs"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                  LIVE
+                </Badge>
+              )}
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {match.venue.split(",")[0]}
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {/* Team 1 */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-bold">
+                  {match.team1.shortName.charAt(0)}
+                </div>
+                <span className="font-medium">{match.team1.name}</span>
+              </div>
+              {match.team1.score && (
+                <div className="text-right">
+                  <span className="font-bold">{match.team1.score}</span>
+                  {match.team1.overs && (
+                    <span className="ml-1 text-sm text-muted-foreground">
+                      ({match.team1.overs} ov)
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Team 2 */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-bold">
+                  {match.team2.shortName.charAt(0)}
+                </div>
+                <span className="font-medium">{match.team2.name}</span>
+              </div>
+              {match.team2.score && (
+                <div className="text-right">
+                  <span className="font-bold">{match.team2.score}</span>
+                  {match.team2.overs && (
+                    <span className="ml-1 text-sm text-muted-foreground">
+                      ({match.team2.overs} ov)
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Status Text */}
+          <div className="mt-3 border-t pt-3">
+            <p className={`text-sm ${match.isLive ? "text-primary font-medium" : "text-muted-foreground"}`}>
+              {match.statusText}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
+
+// Features Data
+const features = [
+  {
+    title: "Live Scores",
+    description: "Ball-by-ball updates with real-time score tracking",
+    icon: <Play className="h-6 w-6 text-primary" />,
+  },
+  {
+    title: "Match Analysis",
+    description: "In-depth statistics and performance insights",
+    icon: <Trophy className="h-6 w-6 text-primary" />,
+  },
+  {
+    title: "Team Tracker",
+    description: "Follow your favorite teams and players",
+    icon: <Users className="h-6 w-6 text-primary" />,
+  },
+  {
+    title: "Full Schedule",
+    description: "Complete cricket calendar across all formats",
+    icon: <Calendar className="h-6 w-6 text-primary" />,
+  },
+];
