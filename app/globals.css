@@ -41,7 +41,7 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  
+
   /* Cricket-specific colors */
   --color-live: var(--live);
   --color-success: var(--success);
@@ -52,7 +52,7 @@
 
 :root {
   --radius: 0.625rem;
-  
+
   /* ESPNCricinfo-inspired Light Mode */
   --background: oklch(0.985 0 0);
   --foreground: oklch(0.145 0 0);
@@ -60,38 +60,38 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  
+
   /* Primary - ESPN Blue */
   --primary: oklch(0.30 0.12 250);
   --primary-foreground: oklch(0.985 0 0);
-  
+
   /* Secondary */
   --secondary: oklch(0.96 0.01 250);
   --secondary-foreground: oklch(0.25 0.08 250);
-  
+
   /* Muted */
   --muted: oklch(0.96 0 0);
   --muted-foreground: oklch(0.45 0 0);
-  
+
   /* Accent */
   --accent: oklch(0.94 0.02 250);
   --accent-foreground: oklch(0.25 0.08 250);
-  
+
   /* Destructive */
   --destructive: oklch(0.55 0.22 25);
-  
+
   /* Border & Input */
   --border: oklch(0.90 0 0);
   --input: oklch(0.90 0 0);
   --ring: oklch(0.40 0.10 250);
-  
+
   /* Chart Colors */
   --chart-1: oklch(0.60 0.20 250);
   --chart-2: oklch(0.65 0.15 165);
   --chart-3: oklch(0.55 0.12 45);
   --chart-4: oklch(0.70 0.18 320);
   --chart-5: oklch(0.75 0.15 70);
-  
+
   /* Sidebar */
   --sidebar: oklch(0.98 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -101,7 +101,7 @@
   --sidebar-accent-foreground: oklch(0.25 0.08 250);
   --sidebar-border: oklch(0.90 0 0);
   --sidebar-ring: oklch(0.40 0.10 250);
-  
+
   /* Cricket Colors */
   --live: oklch(0.60 0.24 25);
   --success: oklch(0.60 0.18 155);
@@ -118,38 +118,38 @@
   --card-foreground: oklch(0.96 0 0);
   --popover: oklch(0.16 0.02 250);
   --popover-foreground: oklch(0.96 0 0);
-  
+
   /* Primary - Lighter ESPN Blue for dark mode */
   --primary: oklch(0.55 0.18 250);
   --primary-foreground: oklch(0.12 0.02 250);
-  
+
   /* Secondary */
   --secondary: oklch(0.22 0.03 250);
   --secondary-foreground: oklch(0.96 0 0);
-  
+
   /* Muted */
   --muted: oklch(0.22 0.02 250);
   --muted-foreground: oklch(0.65 0 0);
-  
+
   /* Accent */
   --accent: oklch(0.22 0.03 250);
   --accent-foreground: oklch(0.96 0 0);
-  
+
   /* Destructive */
   --destructive: oklch(0.65 0.22 25);
-  
+
   /* Border & Input */
   --border: oklch(0.25 0.02 250);
   --input: oklch(0.22 0.02 250);
   --ring: oklch(0.55 0.15 250);
-  
+
   /* Chart Colors - Brighter for dark mode */
   --chart-1: oklch(0.70 0.22 250);
   --chart-2: oklch(0.70 0.18 165);
   --chart-3: oklch(0.75 0.18 70);
   --chart-4: oklch(0.70 0.22 320);
   --chart-5: oklch(0.70 0.22 25);
-  
+
   /* Sidebar */
   --sidebar: oklch(0.14 0.02 250);
   --sidebar-foreground: oklch(0.96 0 0);
@@ -159,7 +159,7 @@
   --sidebar-accent-foreground: oklch(0.96 0 0);
   --sidebar-border: oklch(0.25 0.02 250);
   --sidebar-ring: oklch(0.55 0.15 250);
-  
+
   /* Cricket Colors - Adjusted for dark */
   --live: oklch(0.65 0.24 25);
   --success: oklch(0.65 0.20 155);
@@ -172,55 +172,95 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Container configuration for TailwindCSS v4 */
+  .container {
+    width: 100%;
+    margin-right: auto;
+    margin-left: auto;
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  @media (min-width: 640px) {
+    .container {
+      max-width: 640px;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .container {
+      max-width: 768px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      max-width: 1024px;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .container {
+      max-width: 1280px;
+    }
+  }
+
+  @media (min-width: 1536px) {
+    .container {
+      max-width: 1536px;
+    }
   }
 }
 
 /* Custom Utility Classes */
 @layer utilities {
+
   /* Live indicator animation */
   .animate-live-pulse {
     animation: live-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
-  
+
   @keyframes live-pulse {
-    0%, 100% {
+
+    0%,
+    100% {
       opacity: 1;
     }
+
     50% {
       opacity: 0.5;
     }
   }
-  
+
   /* Score card gradient */
   .score-card-gradient {
-    background: linear-gradient(
-      135deg,
-      hsl(var(--card)) 0%,
-      hsl(var(--accent)) 100%
-    );
+    background: linear-gradient(135deg,
+        hsl(var(--card)) 0%,
+        hsl(var(--accent)) 100%);
   }
-  
+
   /* Text gradient for headings */
   .text-gradient {
-    background: linear-gradient(
-      135deg,
-      hsl(var(--primary)) 0%,
-      hsl(var(--chart-1)) 100%
-    );
+    background: linear-gradient(135deg,
+        hsl(var(--primary)) 0%,
+        hsl(var(--chart-1)) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
-  
+
   /* Glass effect */
   .glass {
     background: oklch(1 0 0 / 0.7);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
   }
-  
+
   .dark .glass {
     background: oklch(0.15 0.02 250 / 0.7);
   }
