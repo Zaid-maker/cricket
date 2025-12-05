@@ -1,17 +1,43 @@
 import Link from "next/link";
-import { ArrowRight, Play, Trophy, Users, Calendar } from "lucide-react";
+import { ArrowRight, Play, Trophy, Users, Calendar, AlertCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
-import { liveMatches, upcomingMatches, completedMatches, featuredSeries } from "@/data/matches";
+import { getCurrentMatches } from "@/app/actions/matches";
+import { getFeaturedSeries } from "@/app/actions/series";
 import { MATCH_STATUSES } from "@/constants/cricket";
+import type { LiveScoreSummary, Series } from "@/types";
 
-export default function Home() {
+export default async function Home() {
+  // Fetch real data from API (with fallback to mock data)
+  const matchesResult = await getCurrentMatches();
+  const seriesResult = await getFeaturedSeries();
+
+  const { live: liveMatches, upcoming: upcomingMatches, completed: completedMatches } = matchesResult;
+  const featuredSeries = seriesResult.series;
+  const usingMockData = matchesResult.usingMockData;
+  const apiError = matchesResult.error;
+
   return (
     <div className="flex flex-col">
+      {/* API Status Alert */}
+      {usingMockData && (
+        <div className="bg-yellow-500/10 border-b border-yellow-500/20">
+          <div className="container px-4 py-2 md:px-6">
+            <Alert variant="default" className="border-yellow-500/50 bg-transparent py-2">
+              <AlertCircle className="h-4 w-4 text-yellow-500" />
+              <AlertDescription className="text-sm text-yellow-700 dark:text-yellow-400">
+                {apiError || "Using demo data. Add your API key to see live scores."}
+              </AlertDescription>
+            </Alert>
+          </div>
+        </div>
+      )}
+
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-primary via-primary/90 to-primary/80 py-16 md:py-24">
         {/* Background Pattern */}
@@ -108,10 +134,10 @@ export default function Home() {
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
                         <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
                       </span>
-                      Live
+                      Live ({liveMatches.length})
                     </TabsTrigger>
-                    <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-                    <TabsTrigger value="results">Results</TabsTrigger>
+                    <TabsTrigger value="upcoming">Upcoming ({upcomingMatches.length})</TabsTrigger>
+                    <TabsTrigger value="results">Results ({completedMatches.length})</TabsTrigger>
                   </TabsList>
                 </div>
 
@@ -128,15 +154,27 @@ export default function Home() {
                 </TabsContent>
 
                 <TabsContent value="upcoming" className="mt-0 space-y-4">
-                  {upcomingMatches.map((match) => (
-                    <MatchCard key={match.matchId} match={match} />
-                  ))}
+                  {upcomingMatches.length > 0 ? (
+                    upcomingMatches.map((match) => (
+                      <MatchCard key={match.matchId} match={match} />
+                    ))
+                  ) : (
+                    <Card className="p-8 text-center text-muted-foreground">
+                      No upcoming matches scheduled
+                    </Card>
+                  )}
                 </TabsContent>
 
                 <TabsContent value="results" className="mt-0 space-y-4">
-                  {completedMatches.map((match) => (
-                    <MatchCard key={match.matchId} match={match} />
-                  ))}
+                  {completedMatches.length > 0 ? (
+                    completedMatches.map((match) => (
+                      <MatchCard key={match.matchId} match={match} />
+                    ))
+                  ) : (
+                    <Card className="p-8 text-center text-muted-foreground">
+                      No recent results
+                    </Card>
+                  )}
                 </TabsContent>
               </Tabs>
             </div>
@@ -152,22 +190,8 @@ export default function Home() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {featuredSeries.map((series) => (
-                    <Link
-                      key={series.id}
-                      href={`/series/${series.id}`}
-                      className="group block rounded-lg border p-3 transition-colors hover:bg-accent"
-                    >
-                      <h4 className="font-medium group-hover:text-primary">
-                        {series.name}
-                      </h4>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {series.currentStatus} • {series.matches} matches
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {series.startDate} - {series.endDate}
-                      </p>
-                    </Link>
+                  {featuredSeries.slice(0, 5).map((series) => (
+                    <SeriesCard key={series.id} series={series} />
                   ))}
                 </CardContent>
               </Card>
@@ -201,8 +225,10 @@ export default function Home() {
                       <p className="text-xs text-muted-foreground">Series</p>
                     </div>
                     <div className="rounded-lg bg-muted p-3 text-center">
-                      <p className="text-2xl font-bold text-primary">12</p>
-                      <p className="text-xs text-muted-foreground">Teams</p>
+                      <p className="text-2xl font-bold text-primary">
+                        {completedMatches.length}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Results</p>
                     </div>
                   </div>
                 </CardContent>
@@ -263,7 +289,7 @@ export default function Home() {
 }
 
 // Match Card Component
-function MatchCard({ match }: { match: (typeof liveMatches)[0] }) {
+function MatchCard({ match }: { match: LiveScoreSummary }) {
   const statusConfig = MATCH_STATUSES[match.status];
 
   return (
@@ -340,6 +366,34 @@ function MatchCard({ match }: { match: (typeof liveMatches)[0] }) {
           </div>
         </CardContent>
       </Card>
+    </Link>
+  );
+}
+
+// Series Card Component
+function SeriesCard({ series }: { series: Series }) {
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  return (
+    <Link
+      href={`/series/${series.id}`}
+      className="group block rounded-lg border p-3 transition-colors hover:bg-accent"
+    >
+      <h4 className="font-medium group-hover:text-primary line-clamp-1">
+        {series.name}
+      </h4>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {series.format} • {series.totalMatches} matches
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {formatDate(series.startDate)} - {formatDate(series.endDate)}
+      </p>
     </Link>
   );
 }
