@@ -133,7 +133,11 @@ export function useFeaturedSeries() {
  * SWR hook for a specific match detail
  */
 export function useMatchDetail(matchId: string | null) {
-    const { data, error, isLoading, mutate } = useSWR(
+    const { data, error, isLoading, mutate } = useSWR<{
+        match: LiveScoreSummary | null;
+        error?: string;
+        usingMockData?: boolean;
+    }>(
         matchId ? `/api/matches/${matchId}` : null,
         async (url: string) => {
             const response = await fetch(url);
