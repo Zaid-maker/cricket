@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import type { LiveScoreSummary } from "@/types";
+import type { LiveScoreSummary, Match } from "@/types";
 
 /**
  * SWR-optimized hook for live matches
@@ -134,7 +134,7 @@ export function useFeaturedSeries() {
  */
 export function useMatchDetail(matchId: string | null) {
     const { data, error, isLoading, mutate } = useSWR<{
-        match: LiveScoreSummary | null;
+        match: Match | null;
         error?: string;
         usingMockData?: boolean;
     }>(

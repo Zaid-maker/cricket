@@ -309,8 +309,8 @@ function MatchCard({ match }: { match: LiveScoreSummary }) {
 
 // Series Card Component
 function SeriesCard({ series }: { series: Series }) {
-    const formatDate = (date: Date) => {
-        return date.toLocaleDateString("en-US", {
+    const formatDate = (date: Date | string) => {
+        return new Date(date).toLocaleDateString("en-US", {
             month: "short",
             day: "numeric",
             year: "numeric",

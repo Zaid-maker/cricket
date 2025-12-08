@@ -269,3 +269,74 @@ export function categorizeMatches(matches: LiveScoreSummary[]): {
 
     return { live, upcoming, completed };
 }
+/**
+ * Transform API match info + scorecard to full Match object
+ */
+export function transformToFullMatch(
+    info: ApiMatchInfo | ScorecardResponse["data"],
+    scorecardData?: ApiScorecardInnings[]
+): Match {
+    const team1 = info.teams[0] || "TBD";
+    const team2 = info.teams[1] || "TBD";
+
+    // Find team info
+    const team1Info = info.teamInfo?.find(
+        (t) => t.name.toLowerCase() === team1.toLowerCase()
+    );
+    const team2Info = info.teamInfo?.find(
+        (t) => t.name.toLowerCase() === team2.toLowerCase()
+    );
+
+    // Transform teams
+    const t1 = transformTeam(team1, team1Info);
+    const t2 = transformTeam(team2, team2Info);
+
+    // Transform innings if available
+    const innings: Innings[] = [];
+    if (scorecardData && scorecardData.length > 0) {
+        scorecardData.forEach((inn, index) => {
+            // Determine batting/bowling teams based on inning name
+            let battingTeamId = t1.id;
+            let bowlingTeamId = t2.id;
+
+            if (inn.inning.toLowerCase().includes(team2.toLowerCase())) {
+                battingTeamId = t2.id;
+                bowlingTeamId = t1.id;
+            }
+
+            innings.push(transformInnings(inn, index + 1, battingTeamId, bowlingTeamId));
+        });
+    }
+
+    // Determine current innings
+    const currentInnings = innings.length > 0 ? innings.length : 1;
+
+    // Determine status
+    const matchStarted = info.status !== "Match not started";
+    const matchEnded = info.status.toLowerCase().includes("won") ||
+        info.status.toLowerCase().includes("draw") ||
+        info.status.toLowerCase().includes("tie") ||
+        info.status.toLowerCase().includes("abandoned");
+
+    return {
+        id: info.id,
+        seriesId: "series_id" in info ? info.series_id : undefined,
+        format: transformMatchFormat(info.matchType),
+        status: transformMatchStatus(matchStarted, matchEnded, info.status),
+        statusText: info.status,
+        team1: t1,
+        team2: t2,
+        venue: {
+            id: info.venue,
+            name: info.venue,
+            city: info.venue.split(",").pop()?.trim() || "",
+            country: "",
+        },
+        startTime: new Date(info.dateTimeGMT),
+        innings,
+        currentInnings,
+        isLive: matchStarted && !matchEnded,
+        lastUpdated: new Date(),
+        // Result fields can be parsed from statusText if needed
+    };
+}

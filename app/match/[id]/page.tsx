@@ -21,6 +21,8 @@ import {
 import { useMatchDetail } from "@/hooks";
 import { MATCH_STATUSES } from "@/constants/cricket";
 
+import { Scorecard } from "@/components/match/scorecard";
+
 export default function MatchDetailPage() {
     const params = useParams();
     const matchId = params.id as string;
@@ -59,6 +61,25 @@ export default function MatchDetailPage() {
     }
 
     const statusConfig = match.status ? MATCH_STATUSES[match.status] : undefined;
+
+    // Helper to get team score from innings
+    const getTeamScore = (teamId: string) => {
+        // Find last inning for this team
+        const teamInnings = match.innings?.filter(
+            (inn) => inn.battingTeamId === teamId
+        );
+        const lastInning = teamInnings?.[teamInnings.length - 1];
+
+        if (!lastInning) return null;
+
+        return {
+            score: `${lastInning.runs}/${lastInning.wickets}`,
+            overs: lastInning.overs
+        };
+    };
+
+    const team1Score = getTeamScore(match.team1.id);
+    const team2Score = getTeamScore(match.team2.id);
 
     return (
         <div className="container px-4 py-8 md:px-6">
@@ -122,14 +143,12 @@ export default function MatchDetailPage() {
                                     </p>
                                 </div>
                             </div>
-                            {match.team1.score && (
+                            {team1Score && (
                                 <div className="text-right">
-                                    <p className="text-3xl font-bold">{match.team1.score}</p>
-                                    {match.team1.overs && (
-                                        <p className="text-sm text-muted-foreground">
-                                            ({match.team1.overs} overs)
-                                        </p>
-                                    )}
+                                    <p className="text-3xl font-bold">{team1Score.score}</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        ({team1Score.overs} overs)
+                                    </p>
                                 </div>
                             )}
                         </div>
@@ -149,14 +168,12 @@ export default function MatchDetailPage() {
                                     </p>
                                 </div>
                             </div>
-                            {match.team2.score && (
+                            {team2Score && (
                                 <div className="text-right">
-                                    <p className="text-3xl font-bold">{match.team2.score}</p>
-                                    {match.team2.overs && (
-                                        <p className="text-sm text-muted-foreground">
-                                            ({match.team2.overs} overs)
-                                        </p>
-                                    )}
+                                    <p className="text-3xl font-bold">{team2Score.score}</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        ({team2Score.overs} overs)
+                                    </p>
                                 </div>
                             )}
                         </div>
@@ -180,21 +197,8 @@ export default function MatchDetailPage() {
             <div className="grid gap-6 lg:grid-cols-3">
                 {/* Main Content - 2 columns */}
                 <div className="space-y-6 lg:col-span-2">
-                    {/* Scorecard (Placeholder for future) */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Trophy className="h-5 w-5 text-primary" />
-                                Scorecard
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-center text-muted-foreground py-8">
-                                Detailed scorecard coming soon. Use the full scorecard API endpoint for
-                                ball-by-ball details.
-                            </p>
-                        </CardContent>
-                    </Card>
+                    {/* Scorecard */}
+                    <Scorecard match={match} />
 
                     {/* Commentary (Placeholder) */}
                     <Card>
@@ -222,7 +226,7 @@ export default function MatchDetailPage() {
                                 <MapPin className="h-5 w-5 shrink-0 text-muted-foreground" />
                                 <div>
                                     <p className="text-sm font-medium">Venue</p>
-                                    <p className="text-sm text-muted-foreground">{match.venue}</p>
+                                    <p className="text-sm text-muted-foreground">{match.venue.name}</p>
                                 </div>
                             </div>
 
@@ -271,24 +275,6 @@ export default function MatchDetailPage() {
                             </CardContent>
                         </Card>
                     )}
-
-                    {/* Share & Actions */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">Actions</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                            <Button variant="outline" className="w-full" disabled>
-                                Share Match
-                            </Button>
-                            <Button variant="outline" className="w-full" disabled>
-                                Add to Calendar
-                            </Button>
-                            <Button variant="outline" className="w-full" disabled>
-                                Set Alert
-                            </Button>
-                        </CardContent>
-                    </Card>
                 </div>
             </div>
         </div>

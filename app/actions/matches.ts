@@ -4,8 +4,8 @@
 // Using Next.js 16 server actions with caching
 
 import { fetchCurrentMatches, fetchMatchInfo, fetchMatchScorecard, CricApiError } from "@/services/cricket-api";
-import { transformMatches, categorizeMatches, transformToScoreSummary } from "@/services/transformers";
-import type { LiveScoreSummary } from "@/types";
+import { transformMatches, categorizeMatches, transformToScoreSummary, transformToFullMatch } from "@/services/transformers";
+import type { LiveScoreSummary, Match } from "@/types";
 import { liveMatches, upcomingMatches, completedMatches } from "@/data/matches";
 
 /**
@@ -73,23 +73,26 @@ export async function getLiveMatches(): Promise<{
 
 /**
  * Get match details by ID
+ * Tries to fetch full scorecard, falls back to basic info
  */
 export async function getMatchDetails(matchId: string): Promise<{
-    match: LiveScoreSummary | null;
+    match: Match | null;
     error?: string;
 }> {
     try {
-        const response = await fetchMatchInfo(matchId);
-        const match = transformToScoreSummary({
-            ...response.data,
-            matchStarted: true,
-            matchEnded: response.data.status.toLowerCase().includes("won"),
-            fantasyEnabled: false,
-            bbbEnabled: false,
-            hasSquad: false,
-        });
-
-        return { match };
+        // Try to fetch full scorecard first
+        try {
+            const response = await fetchMatchScorecard(matchId);
+            const match = transformToFullMatch(response.data, response.data.scorecard);
+            return { match };
+        } catch (e) {
+            // Fallback to match info if scorecard fails (e.g. match not started)
+            console.log("Scorecard fetch failed, falling back to match info");
+            const response = await fetchMatchInfo(matchId);
+            // Pass empty scorecard array since we only have match info
+            const match = transformToFullMatch(response.data, []);
+            return { match };
+        }
     } catch (error) {
         console.error("Failed to fetch match details:", error);
 
