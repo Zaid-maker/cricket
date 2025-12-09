@@ -15,6 +15,7 @@ export interface CricbuzzMatchInfo {
         id: number;
         ground: string;
         city: string;
+        country?: string;
         timezone: string;
     };
     currentBatTeamId?: number; // might be in matchInfo or separate
@@ -27,6 +28,18 @@ export interface CricbuzzTeam {
     imageId?: number;
 }
 
+export interface CricbuzzLiveMatchItem {
+    matchInfo: CricbuzzMatchInfo;
+    matchScore?: {
+        team1Score?: {
+            inngs1?: { runs?: number; wickets?: number; overs?: number | string };
+        };
+        team2Score?: {
+            inngs1?: { runs?: number; wickets?: number; overs?: number | string };
+        };
+    };
+}
+
 export interface CricbuzzLiveResponse {
     typeMatches: Array<{
         matchType: string;
@@ -34,10 +47,7 @@ export interface CricbuzzLiveResponse {
             seriesAdWrapper?: {
                 seriesId: number;
                 seriesName: string;
-                matches: Array<{
-                    matchInfo: CricbuzzMatchInfo;
-                    matchScore?: any; // sometimes present in list
-                }>;
+                matches: Array<CricbuzzLiveMatchItem>;
             };
         }>;
     }>;

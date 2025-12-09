@@ -11,11 +11,11 @@ import {
     MatchStatus,
     MatchFormat
 } from "@/types";
-import { CricbuzzMatchInfo, CricbuzzScorecardResponse, CricbuzzInnings, CricbuzzBatsman, CricbuzzBowler } from "@/types/cricbuzz";
+import { CricbuzzMatchInfo, CricbuzzScorecardResponse, CricbuzzInnings, CricbuzzBatsman, CricbuzzBowler, CricbuzzLiveMatchItem, CricbuzzLiveResponse } from "@/types/cricbuzz";
 
 // --- Helper Functions ---
 
-function getStatusFromState(state: string, statusText: string): MatchStatus {
+function getStatusFromState(state: string, _statusText: string): MatchStatus {
     const s = state.toLowerCase();
     if (s === "complete" || s === "result") return "COMPLETED";
     if (s === "in progress" || s === "running" || s === "live") return "LIVE";
@@ -45,8 +45,8 @@ function safeParseInt(val: string | number | undefined): number {
 }
 
 // Transform for List View / Live Ticker
-export function transformToLiveScoreSummary(apiMatch: any): LiveScoreSummary {
-    const info = apiMatch.matchInfo as CricbuzzMatchInfo;
+export function transformToLiveScoreSummary(apiMatch: CricbuzzLiveMatchItem & { seriesName?: string }): LiveScoreSummary {
+    const info = apiMatch.matchInfo;
     const score = apiMatch.matchScore;
 
     // Note: LiveScoreSummary team objects have optional 'score' and 'overs', 
@@ -65,7 +65,7 @@ export function transformToLiveScoreSummary(apiMatch: any): LiveScoreSummary {
 
     return {
         matchId: String(info.matchId),
-        seriesName: info.seriesName || (apiMatch as any).seriesName || "",
+        seriesName: info.seriesName || apiMatch.seriesName || "",
         team1: {
             name: info.team1.teamName,
             shortName: info.team1.teamSName,
@@ -89,12 +89,12 @@ export function transformToLiveScoreSummary(apiMatch: any): LiveScoreSummary {
 
 // Transform for Match Detail Page
 export function transformToFullMatch(
-    apiMatch: any,
+    apiMatch: CricbuzzLiveMatchItem & { seriesName?: string },
     scorecardData: CricbuzzScorecardResponse | null
 ): Match | null {
     if (!apiMatch) return null;
 
-    const info = apiMatch.matchInfo as CricbuzzMatchInfo;
+    const info = apiMatch.matchInfo;
 
     // Transform Innings if available
     let innings: Innings[] = [];
@@ -126,7 +126,7 @@ export function transformToFullMatch(
     return {
         id: String(info.matchId),
         seriesId: String(info.seriesId),
-        seriesName: info.seriesName || (apiMatch as any).seriesName,
+        seriesName: info.seriesName || apiMatch.seriesName,
         matchNumber: 0,
         format: parseMatchFormat(info.matchFormat),
         status: getStatusFromState(info.state, info.status),
@@ -153,10 +153,10 @@ export function addScorecardToMatch(match: Match, scorecardData: CricbuzzScoreca
     // We need to reconstruct minimal match info for transformInnings to work 
     // (it needs team IDs to map batting/bowling teams)
     // We can extract IDs from the Match object itself since we mapped them into id fields.
-    const minimalMatchInfo: any = {
-        team1: { teamId: match.team1.id, teamName: match.team1.name },
-        team2: { teamId: match.team2.id, teamName: match.team2.name }
-    };
+    const minimalMatchInfo = {
+        team1: { teamId: Number(match.team1.id), teamName: match.team1.name },
+        team2: { teamId: Number(match.team2.id), teamName: match.team2.name }
+    } as unknown as CricbuzzMatchInfo;
 
     const innings = scorecardData.scorecard.map(inng => transformInnings(inng, minimalMatchInfo));
 
@@ -179,9 +179,8 @@ function transformInnings(inng: CricbuzzInnings, matchInfo: CricbuzzMatchInfo): 
         runs: safeParseInt(inng.scoreDetails?.runs),
         wickets: safeParseInt(inng.scoreDetails?.wickets),
         overs: safeParseFloat(inng.scoreDetails?.overs), // number in type
-        balls: 0, // would need calculation from overs
-        runRate: safeParseFloat(inng.scoreDetails?.runRate), // Assuming API provides this or calculate? Check API type.
-        // Assuming API might not provide runRate in `scoreDetails` wrapper seen so far, defaulting 0
+        balls: 0,
+        runRate: safeParseFloat(inng.scoreDetails?.runRate),
         extras: {
             wides: inng.extras?.wides || 0,
             noBalls: inng.extras?.noBalls || 0,
@@ -192,15 +191,14 @@ function transformInnings(inng: CricbuzzInnings, matchInfo: CricbuzzMatchInfo): 
         },
         batting: (inng.batsman || []).map(b => transformBattingStats(b)),
         bowling: (inng.bowler || []).map(b => transformBowlingStats(b)),
-        fallOfWickets: [], // Populate if API provides FOW array
-        partnerships: [],  // Populate if API provides keys
-        recentOvers: [],   // Populate if API provides keys
+        fallOfWickets: [],
+        partnerships: [],
+        recentOvers: [],
         isCompleted: false
     };
 }
 
 function transformBattingStats(b: CricbuzzBatsman): BattingStats {
-    // If 'isOut' is boolean in types but derived from 'outdec' string
     const isOut = !!b.outdec;
 
     return {
@@ -212,8 +210,8 @@ function transformBattingStats(b: CricbuzzBatsman): BattingStats {
         sixes: safeParseInt(b.sixes),
         strikeRate: safeParseFloat(b.strkrate),
         isOut: isOut,
-        dismissedBy: b.outdec || undefined, // Mapping 'outdec' string here
-        position: 0 // Not provided in basic stats
+        dismissedBy: b.outdec || undefined,
+        position: 0
     };
 }
 
@@ -228,10 +226,45 @@ function transformBowlingStats(b: CricbuzzBowler): BowlingStats {
         economy: safeParseFloat(b.economy),
         wides: safeParseInt(b.wides),
         noBalls: safeParseInt(b.no_balls),
-        dotBalls: 0 // Not usually provided directly in summary
+        dotBalls: 0
     };
 }
 
+export function transformMatches(data: CricbuzzLiveResponse): LiveScoreSummary[] {
+    if (!data || !data.typeMatches) return [];
+
+    // Flatten Cricbuzz nested structure: typeMatches -> seriesMatches -> seriesAdWrapper -> matches
+    const summaries: LiveScoreSummary[] = [];
+
+    data.typeMatches.forEach((tm) => {
+        if (tm.seriesMatches) {
+            tm.seriesMatches.forEach((sm) => {
+                if (sm.seriesAdWrapper && sm.seriesAdWrapper.matches) {
+                    sm.seriesAdWrapper.matches.forEach((m) => {
+                        // We need to treat 'm' as mutable/intersected to inject seriesName
+                        const matchWithSeries = m as CricbuzzLiveMatchItem & { seriesName?: string };
+
+                        // Inject series name if missing in match info, though cricbuzz usually has it
+                        if (!matchWithSeries.matchInfo.seriesName) matchWithSeries.seriesName = sm.seriesAdWrapper?.seriesName;
+                        summaries.push(transformToLiveScoreSummary(matchWithSeries));
+                    });
+                }
+            });
+        }
+    });
+
+    return summaries;
+}
+
+export function categorizeMatches(matches: LiveScoreSummary[]): { live: LiveScoreSummary[], upcoming: LiveScoreSummary[], completed: LiveScoreSummary[] } {
+    const live = matches.filter(m => m.status === "LIVE" || m.status === "INNINGS_BREAK" || m.status === "TEA" || m.status === "LUNCH" || m.status === "DRINKS" || m.status === "DELAYED");
+    const upcoming = matches.filter(m => m.status === "UPCOMING");
+    const completed = matches.filter(m => m.status === "COMPLETED" || m.status === "ABANDONED" || m.status === "NO_RESULT");
+    return { live, upcoming, completed };
+}
+
+// Keeping these as 'any' for now as we don't have upstream types yet, but could add TODO
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function transformSeries(s: any): Series {
     return {
         id: String(s.id),
@@ -243,6 +276,7 @@ export function transformSeries(s: any): Series {
     };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function transformPlayer(p: any): Player {
     return {
         id: String(p.id),

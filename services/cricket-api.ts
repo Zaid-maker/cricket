@@ -1,15 +1,14 @@
-
 // Cricbuzz API Service (RapidAPI)
-import { LiveScoreSummary, Match, Series, Innings, BattingStats, BowlingStats, Player } from "@/types";
+import { LiveScoreSummary, Match, Series, Player } from "@/types";
 import { transformToLiveScoreSummary, transformToFullMatch } from "./transformers";
-import { CricbuzzLiveResponse, CricbuzzScorecardResponse, CricbuzzMatchInfo } from "@/types/cricbuzz";
+import { CricbuzzLiveResponse, CricbuzzScorecardResponse, CricbuzzLiveMatchItem } from "@/types/cricbuzz";
 
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 const RAPIDAPI_HOST = process.env.RAPIDAPI_HOST || "cricbuzz-cricket.p.rapidapi.com";
 const BASE_URL = `https://${RAPIDAPI_HOST}`;
 
 // Cache for match list
-let matchCache: { data: any[], timestamp: number } | null = null;
+let matchCache: { data: (CricbuzzLiveMatchItem & { seriesName?: string })[], timestamp: number } | null = null;
 const CACHE_TTL = 30 * 1000; // 30 seconds
 
 async function fetchAPI<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
@@ -45,7 +44,7 @@ export async function fetchCurrentMatches(): Promise<LiveScoreSummary[]> {
         const data = await fetchAPI<CricbuzzLiveResponse>("matches/v1/live");
 
         // Flatten the nested structure
-        const matches: any[] = [];
+        const matches: (CricbuzzLiveMatchItem & { seriesName?: string })[] = [];
         if (data?.typeMatches) {
             data.typeMatches.forEach(type => {
                 type.seriesMatches?.forEach(series => {
@@ -53,10 +52,17 @@ export async function fetchCurrentMatches(): Promise<LiveScoreSummary[]> {
                     if (seriesMatches) {
                         seriesMatches.forEach(m => {
                             // Attach series name to match info for easier access
-                            if (m.matchInfo) {
-                                (m.matchInfo as any).seriesName = series.seriesAdWrapper?.seriesName;
+                            // We cast to our intersection type to allow attaching the property
+                            const matchWithSeries = m as CricbuzzLiveMatchItem & { seriesName?: string };
+
+                            // Also ensure matchInfo has it if possible, but our transformer checks parent prop too
+                            if (series.seriesAdWrapper?.seriesName) {
+                                matchWithSeries.seriesName = series.seriesAdWrapper.seriesName;
+                                if (matchWithSeries.matchInfo) {
+                                    matchWithSeries.matchInfo.seriesName = series.seriesAdWrapper.seriesName;
+                                }
                             }
-                            matches.push(m);
+                            matches.push(matchWithSeries);
                         });
                     }
                 });
@@ -80,11 +86,11 @@ export async function fetchCurrentMatches(): Promise<LiveScoreSummary[]> {
  */
 export async function fetchMatchInfo(matchId: string): Promise<Match | null> {
     // 1. Try to find basic info in our cache or fetch list
-    let basicMatchData = null;
+    let basicMatchData: (CricbuzzLiveMatchItem & { seriesName?: string }) | null = null;
 
     // Check cache first
     if (matchCache && (Date.now() - matchCache.timestamp < CACHE_TTL)) {
-        basicMatchData = matchCache.data.find((m: any) => String(m.matchInfo?.matchId) === matchId);
+        basicMatchData = matchCache.data.find((m) => String(m.matchInfo?.matchId) === matchId) || null;
     }
 
     if (!basicMatchData) {
@@ -98,8 +104,14 @@ export async function fetchMatchInfo(matchId: string): Promise<Match | null> {
                         if (basicMatchData) break;
                         for (const m of series.seriesAdWrapper?.matches || []) {
                             if (String(m.matchInfo?.matchId) === matchId) {
-                                basicMatchData = m;
-                                if (m.matchInfo) (m.matchInfo as any).seriesName = series.seriesAdWrapper?.seriesName;
+                                const matchWithSeries = m as CricbuzzLiveMatchItem & { seriesName?: string };
+                                if (series.seriesAdWrapper?.seriesName) {
+                                    matchWithSeries.seriesName = series.seriesAdWrapper.seriesName;
+                                    if (matchWithSeries.matchInfo) {
+                                        matchWithSeries.matchInfo.seriesName = series.seriesAdWrapper.seriesName;
+                                    }
+                                }
+                                basicMatchData = matchWithSeries;
                                 break;
                             }
                         }
@@ -142,6 +154,6 @@ export async function fetchSeries(): Promise<Series[]> {
     return [];
 }
 
-export async function fetchPlayerInfo(id: string): Promise<Player | null> {
+export async function fetchPlayerInfo(_id: string): Promise<Player | null> {
     return null; // Not implemented yet
 }

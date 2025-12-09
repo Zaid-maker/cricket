@@ -250,6 +250,7 @@ export interface Match {
 // Live Score Summary (for cards/widgets)
 export interface LiveScoreSummary {
     matchId: string;
+    seriesName?: string;
     format: MatchFormat;
     status: MatchStatus;
     statusText: string;
