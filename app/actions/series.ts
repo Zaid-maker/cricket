@@ -2,8 +2,8 @@
 
 // Server Actions for Series Data
 
-import { fetchSeries, CricApiError } from "@/services/cricket-api";
-import { transformSeries } from "@/services/transformers";
+import { fetchSeries } from "@/services/cricket-api";
+// import { transformSeries } from "@/services/transformers"; // Unused if fetchSeries returns Series[]
 import type { Series } from "@/types";
 import { featuredSeries } from "@/data/matches";
 
@@ -27,8 +27,12 @@ export async function getAllSeries(): Promise<{
     usingMockData: boolean;
 }> {
     try {
-        const response = await fetchSeries();
-        const series = response.data.map(transformSeries);
+        const series = await fetchSeries();
+
+        // If API isn't implemented (returns empty), fall back to mock for now
+        if (series.length === 0) {
+            throw new Error("Series API not implemented");
+        }
 
         return {
             series,
@@ -39,7 +43,7 @@ export async function getAllSeries(): Promise<{
 
         return {
             series: mockSeries,
-            error: error instanceof CricApiError ? error.message : "Failed to fetch series",
+            error: error instanceof Error ? error.message : "Failed to fetch series",
             usingMockData: true,
         };
     }
@@ -55,12 +59,16 @@ export async function getFeaturedSeries(): Promise<{
     usingMockData: boolean;
 }> {
     try {
-        const response = await fetchSeries();
+        const allSeries = await fetchSeries();
+
+        if (allSeries.length === 0) {
+            throw new Error("Series API not implemented");
+        }
+
         const now = new Date();
 
         // Filter to active or upcoming series and take top 5
-        const series = response.data
-            .map(transformSeries)
+        const series = allSeries
             .filter((s) => s.endDate >= now)
             .slice(0, 5);
 
@@ -73,7 +81,7 @@ export async function getFeaturedSeries(): Promise<{
 
         return {
             series: mockSeries,
-            error: error instanceof CricApiError ? error.message : "Failed to fetch series",
+            error: error instanceof Error ? error.message : "Failed to fetch series",
             usingMockData: true,
         };
     }
