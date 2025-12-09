@@ -5,6 +5,7 @@
 
 import { fetchCurrentMatches, fetchMatchInfo, fetchMatchScorecard } from "@/services/cricket-api";
 import { addScorecardToMatch, transformToFullMatch } from "@/services/transformers";
+import { checkAndNotify } from "@/services/notifications";
 import { LiveScoreSummary, Match } from "@/types";
 import { liveMatches, upcomingMatches, completedMatches } from "@/data/matches";
 
@@ -21,6 +22,10 @@ export async function getCurrentMatches(): Promise<{
 }> {
     try {
         const matches = await fetchCurrentMatches();
+
+        // Trigger notifications (fire and forget to not block UI, or await if critical)
+        // We await to ensure serverless runtime doesn't kill usage
+        checkAndNotify(matches).catch(err => console.error("Notification failed:", err));
 
         // Categorize manually since fetchCurrentMatches returns flat list of LiveScoreSummary
         const live = matches.filter(m => m.status === "LIVE" || m.status === "INNINGS_BREAK" || m.status === "TEA" || m.status === "LUNCH" || m.status === "DRINKS" || m.status === "DELAYED");

@@ -11,16 +11,28 @@ const BASE_URL = `https://${RAPIDAPI_HOST}`;
 let matchCache: { data: (CricbuzzLiveMatchItem & { seriesName?: string })[], timestamp: number } | null = null;
 const CACHE_TTL = 30 * 1000; // 30 seconds
 
-// API Usage Tracking
-let apiUsage = {
-    limit: 0,
-    remaining: 0,
-    reset: 0,
-    lastUpdated: 0
-};
+// API Usage Tracking (Global Singleton)
+// We use globalThis to persist state across module reloads and server action invocations in dev
+declare global {
+    var _apiUsage: {
+        limit: number;
+        remaining: number;
+        reset: number;
+        lastUpdated: number;
+    } | undefined;
+}
+
+if (!globalThis._apiUsage) {
+    globalThis._apiUsage = {
+        limit: 0,
+        remaining: 0,
+        reset: 0,
+        lastUpdated: 0
+    };
+}
 
 export function getApiUsage() {
-    return apiUsage;
+    return globalThis._apiUsage!;
 }
 
 async function fetchAPI<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
@@ -45,7 +57,7 @@ async function fetchAPI<T>(endpoint: string, params: Record<string, string> = {}
     const reset = response.headers.get("x-ratelimit-requests-reset");
 
     if (limit && remaining) {
-        apiUsage = {
+        globalThis._apiUsage = {
             limit: parseInt(limit, 10),
             remaining: parseInt(remaining, 10),
             reset: reset ? parseInt(reset, 10) : 0,
