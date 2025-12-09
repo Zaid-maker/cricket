@@ -11,6 +11,7 @@ import {
 import { siteConfig } from "@/config/site";
 import { footerNavItems } from "@/config/navigation";
 import { Separator } from "@/components/ui/separator";
+import { ApiUsage } from "@/components/api-usage";
 
 export function Footer() {
     return (
@@ -127,6 +128,12 @@ export function Footer() {
                     <p className="text-center text-sm text-muted-foreground">
                         © {new Date().getFullYear()} {siteConfig.name}. All rights reserved.
                     </p>
+
+                    {/* API Usage Indicator */}
+                    <div className="w-full max-w-[200px] sm:w-auto">
+                        <ApiUsage />
+                    </div>
+
                     <div className="flex flex-wrap justify-center gap-4 text-sm text-muted-foreground">
                         <Link href="/privacy" className="hover:text-foreground">
                             Privacy Policy

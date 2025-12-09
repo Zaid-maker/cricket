@@ -11,6 +11,18 @@ const BASE_URL = `https://${RAPIDAPI_HOST}`;
 let matchCache: { data: (CricbuzzLiveMatchItem & { seriesName?: string })[], timestamp: number } | null = null;
 const CACHE_TTL = 30 * 1000; // 30 seconds
 
+// API Usage Tracking
+let apiUsage = {
+    limit: 0,
+    remaining: 0,
+    reset: 0,
+    lastUpdated: 0
+};
+
+export function getApiUsage() {
+    return apiUsage;
+}
+
 async function fetchAPI<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
     if (!RAPIDAPI_KEY) {
         throw new Error("RAPIDAPI_KEY is not defined");
@@ -26,6 +38,20 @@ async function fetchAPI<T>(endpoint: string, params: Record<string, string> = {}
         },
         next: { revalidate: 30 },
     });
+
+    // Capture Rate Limits
+    const limit = response.headers.get("x-ratelimit-requests-limit");
+    const remaining = response.headers.get("x-ratelimit-requests-remaining");
+    const reset = response.headers.get("x-ratelimit-requests-reset");
+
+    if (limit && remaining) {
+        apiUsage = {
+            limit: parseInt(limit, 10),
+            remaining: parseInt(remaining, 10),
+            reset: reset ? parseInt(reset, 10) : 0,
+            lastUpdated: Date.now()
+        };
+    }
 
     if (!response.ok) {
         const errorText = await response.text();
