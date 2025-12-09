@@ -69,13 +69,13 @@ export async function checkAndNotify(matches: LiveScoreSummary[]) {
 
         // Notify on Match Complete
         if (status === "completed" || status === "result") {
-            const notificationKey = `end-${matchId}`;
+            const notificationKey = `end - ${matchId} `;
 
             if (!NOTIFIED_MATCHES.has(notificationKey)) {
                 // Only send completion if we haven't already
                 await sendDiscordWebhook({
                     title: "🏁 Match Ended",
-                    description: `**${match.team1.name}** vs **${match.team2.name}** has finished.`,
+                    description: `** ${match.team1.name}** vs ** ${match.team2.name}** has finished.`,
                     color: 0xf87171, // Red
                     fields: [
                         { name: "Status", value: match.statusText, inline: false }
