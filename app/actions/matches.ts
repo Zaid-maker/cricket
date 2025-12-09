@@ -3,9 +3,9 @@
 // Server Actions for Match Data
 // Using Next.js 16 server actions with caching
 
-import { fetchCurrentMatches, fetchMatchInfo, fetchMatchScorecard, CricApiError } from "@/services/cricket-api";
-import { transformMatches, categorizeMatches, transformToScoreSummary, transformToFullMatch } from "@/services/transformers";
-import type { LiveScoreSummary, Match } from "@/types";
+import { fetchCurrentMatches, fetchMatchInfo, fetchMatchScorecard } from "@/services/cricket-api";
+import { addScorecardToMatch, transformToFullMatch } from "@/services/transformers";
+import { LiveScoreSummary, Match } from "@/types";
 import { liveMatches, upcomingMatches, completedMatches } from "@/data/matches";
 
 /**
@@ -20,23 +20,26 @@ export async function getCurrentMatches(): Promise<{
     usingMockData: boolean;
 }> {
     try {
-        const response = await fetchCurrentMatches();
-        const matches = transformMatches(response.data);
-        const categorized = categorizeMatches(matches);
+        const matches = await fetchCurrentMatches();
+
+        // Categorize manually since fetchCurrentMatches returns flat list of LiveScoreSummary
+        const live = matches.filter(m => m.status === "LIVE" || m.status === "INNINGS_BREAK" || m.status === "TEA" || m.status === "LUNCH" || m.status === "DRINKS" || m.status === "DELAYED");
+        const upcoming = matches.filter(m => m.status === "UPCOMING");
+        const completed = matches.filter(m => m.status === "COMPLETED" || m.status === "ABANDONED" || m.status === "NO_RESULT");
 
         return {
-            ...categorized,
+            live,
+            upcoming,
+            completed,
             usingMockData: false,
         };
     } catch (error) {
         console.error("Failed to fetch current matches:", error);
-
-        // Fallback to mock data
         return {
             live: liveMatches,
             upcoming: upcomingMatches,
             completed: completedMatches,
-            error: error instanceof CricApiError ? error.message : "Failed to fetch matches",
+            error: error instanceof Error ? error.message : "Failed to fetch matches",
             usingMockData: true,
         };
     }
@@ -52,21 +55,17 @@ export async function getLiveMatches(): Promise<{
     usingMockData: boolean;
 }> {
     try {
-        const response = await fetchCurrentMatches();
-        const matches = transformMatches(response.data);
-        const liveOnly = matches.filter((m) => m.isLive);
-
+        const result = await getCurrentMatches();
         return {
-            matches: liveOnly,
-            usingMockData: false,
+            matches: result.live,
+            usingMockData: result.usingMockData,
+            error: result.error
         };
     } catch (error) {
-        console.error("Failed to fetch live matches:", error);
-
         return {
             matches: liveMatches,
-            error: error instanceof CricApiError ? error.message : "Failed to fetch matches",
-            usingMockData: true,
+            error: "Failed",
+            usingMockData: true
         };
     }
 }
@@ -80,26 +79,30 @@ export async function getMatchDetails(matchId: string): Promise<{
     error?: string;
 }> {
     try {
-        // Try to fetch full scorecard first
+        // 1. Get basic info (returns Match object with empty innings)
+        const matchBasic = await fetchMatchInfo(matchId);
+
+        if (!matchBasic) {
+            return { match: null, error: "Match not found" };
+        }
+
+        // 2. Get Scorecard
         try {
-            const response = await fetchMatchScorecard(matchId);
-            const match = transformToFullMatch(response.data, response.data.scorecard);
-            return { match };
+            const scorecardResponse = await fetchMatchScorecard(matchId);
+
+            if (scorecardResponse) {
+                // Merge scorecard into match info
+                const matchFull = addScorecardToMatch(matchBasic, scorecardResponse);
+                return { match: matchFull };
+            }
+            return { match: matchBasic };
         } catch (e) {
-            // Fallback to match info if scorecard fails (e.g. match not started)
             console.log("Scorecard fetch failed, falling back to match info");
-            const response = await fetchMatchInfo(matchId);
-            // Pass empty scorecard array since we only have match info
-            const match = transformToFullMatch(response.data, []);
-            return { match };
+            return { match: matchBasic };
         }
     } catch (error) {
         console.error("Failed to fetch match details:", error);
-
-        return {
-            match: null,
-            error: error instanceof CricApiError ? error.message : "Failed to fetch match details",
-        };
+        return { match: null, error: "Failed" };
     }
 }
 
@@ -107,18 +110,6 @@ export async function getMatchDetails(matchId: string): Promise<{
  * Get match scorecard by ID
  */
 export async function getMatchScorecard(matchId: string) {
-    try {
-        const response = await fetchMatchScorecard(matchId);
-        return {
-            data: response.data,
-            error: undefined,
-        };
-    } catch (error) {
-        console.error("Failed to fetch scorecard:", error);
-
-        return {
-            data: null,
-            error: error instanceof CricApiError ? error.message : "Failed to fetch scorecard",
-        };
-    }
+    const data = await fetchMatchScorecard(matchId);
+    return { data, error: undefined };
 }

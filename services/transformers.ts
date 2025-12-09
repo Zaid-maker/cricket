@@ -1,342 +1,256 @@
-// Data Transformers
-// Transform API responses to app types
 
-import type {
-    ApiMatch,
-    ApiMatchInfo,
-    ApiSeries,
-    ApiTeamScore,
-    ApiTeamInfo,
-    ApiScorecardInnings,
-    ApiScorecardBatting,
-    ApiScorecardBowling,
-} from "@/types/api";
-
-import type {
+import {
     LiveScoreSummary,
-    MatchFormat,
-    MatchStatus,
     Match,
     Team,
     Innings,
     BattingStats,
     BowlingStats,
+    Player,
     Series,
+    MatchStatus,
+    MatchFormat
 } from "@/types";
+import { CricbuzzMatchInfo, CricbuzzScorecardResponse, CricbuzzInnings, CricbuzzBatsman, CricbuzzBowler } from "@/types/cricbuzz";
 
-/**
- * Transform API match type to app MatchFormat
- */
-export function transformMatchFormat(apiType: string): MatchFormat {
-    const formatMap: Record<string, MatchFormat> = {
-        t20: "T20",
-        t10: "T10",
-        odi: "ODI",
-        test: "TEST",
-        the_hundred: "THE_HUNDRED",
-    };
-    return formatMap[apiType.toLowerCase()] || "T20";
+// --- Helper Functions ---
+
+function getStatusFromState(state: string, statusText: string): MatchStatus {
+    const s = state.toLowerCase();
+    if (s === "complete" || s === "result") return "COMPLETED";
+    if (s === "in progress" || s === "running" || s === "live") return "LIVE";
+    if (s === "abandoned" || s === "no result") return "ABANDONED";
+    if (s === "delay") return "DELAYED";
+    return "UPCOMING";
 }
 
-/**
- * Transform API match to MatchStatus
- */
-export function transformMatchStatus(
-    matchStarted: boolean,
-    matchEnded: boolean,
-    status: string
-): MatchStatus {
-    if (!matchStarted) return "UPCOMING";
-    if (matchEnded) return "COMPLETED";
-
-    // Check for breaks
-    const lowerStatus = status.toLowerCase();
-    if (lowerStatus.includes("innings break")) return "INNINGS_BREAK";
-    if (lowerStatus.includes("lunch")) return "LUNCH";
-    if (lowerStatus.includes("tea")) return "TEA";
-    if (lowerStatus.includes("drinks")) return "DRINKS";
-    if (lowerStatus.includes("rain") || lowerStatus.includes("delay")) return "DELAYED";
-
-    return "LIVE";
+function parseMatchFormat(format: string): MatchFormat {
+    const f = format.toUpperCase();
+    if (f === "T20" || f === "ODI" || f === "TEST" || f === "T10" || f === "THE_HUNDRED") {
+        return f as MatchFormat;
+    }
+    return "T20"; // Fallback default
 }
 
-/**
- * Format score from API response
- */
-function formatScore(score?: ApiTeamScore): string | undefined {
-    if (!score) return undefined;
-    return `${score.r}/${score.w}`;
+function safeParseFloat(val: string | number | undefined): number {
+    if (typeof val === "number") return val;
+    if (typeof val === "string") return parseFloat(val) || 0;
+    return 0;
 }
 
-/**
- * Format overs from API response
- */
-function formatOvers(score?: ApiTeamScore): string | undefined {
-    if (!score) return undefined;
-    return score.o.toString();
+function safeParseInt(val: string | number | undefined): number {
+    if (typeof val === "number") return Math.floor(val);
+    if (typeof val === "string") return parseInt(val, 10) || 0;
+    return 0;
 }
 
-/**
- * Transform API match to LiveScoreSummary (for cards/widgets)
- */
-export function transformToScoreSummary(match: ApiMatch): LiveScoreSummary {
-    const team1 = match.teams[0] || "TBD";
-    const team2 = match.teams[1] || "TBD";
+// Transform for List View / Live Ticker
+export function transformToLiveScoreSummary(apiMatch: any): LiveScoreSummary {
+    const info = apiMatch.matchInfo as CricbuzzMatchInfo;
+    const score = apiMatch.matchScore;
 
-    // Find team info and scores
-    const team1Info = match.teamInfo?.find(
-        (t) => t.name.toLowerCase() === team1.toLowerCase()
-    );
-    const team2Info = match.teamInfo?.find(
-        (t) => t.name.toLowerCase() === team2.toLowerCase()
-    );
+    // Note: LiveScoreSummary team objects have optional 'score' and 'overs', 
+    // unlike the main Team interface. We construct them explicitly here.
 
-    // Scores are ordered by innings, find latest for each team
-    const team1Score = match.score?.find((s) =>
-        s.inning.toLowerCase().includes(team1.toLowerCase())
-    );
-    const team2Score = match.score?.find((s) =>
-        s.inning.toLowerCase().includes(team2.toLowerCase())
-    );
+    // Attempt to extract scores
+    const t1ScoreStr = score?.team1Score?.inngs1?.runs
+        ? `${score.team1Score.inngs1.runs}/${score.team1Score.inngs1.wickets !== undefined ? score.team1Score.inngs1.wickets : 0}`
+        : undefined;
+    const t1OversStr = score?.team1Score?.inngs1?.overs ? String(score.team1Score.inngs1.overs) : undefined;
+
+    const t2ScoreStr = score?.team2Score?.inngs1?.runs
+        ? `${score.team2Score.inngs1.runs}/${score.team2Score.inngs1.wickets !== undefined ? score.team2Score.inngs1.wickets : 0}`
+        : undefined;
+    const t2OversStr = score?.team2Score?.inngs1?.overs ? String(score.team2Score.inngs1.overs) : undefined;
 
     return {
-        matchId: match.id,
-        format: transformMatchFormat(match.matchType),
-        status: transformMatchStatus(match.matchStarted, match.matchEnded, match.status),
-        statusText: match.status,
+        matchId: String(info.matchId),
+        seriesName: info.seriesName || (apiMatch as any).seriesName || "",
         team1: {
-            name: team1,
-            shortName: team1Info?.shortname || team1.substring(0, 3).toUpperCase(),
-            score: formatScore(team1Score),
-            overs: formatOvers(team1Score),
+            name: info.team1.teamName,
+            shortName: info.team1.teamSName,
+            score: t1ScoreStr,
+            overs: t1OversStr,
         },
         team2: {
-            name: team2,
-            shortName: team2Info?.shortname || team2.substring(0, 3).toUpperCase(),
-            score: formatScore(team2Score),
-            overs: formatOvers(team2Score),
+            name: info.team2.teamName,
+            shortName: info.team2.teamSName,
+            score: t2ScoreStr,
+            overs: t2OversStr,
         },
-        venue: match.venue,
-        startTime: new Date(match.dateTimeGMT),
-        isLive: match.matchStarted && !match.matchEnded,
-    };
-}
-
-/**
- * Transform API team info to app Team type
- */
-export function transformTeam(
-    name: string,
-    teamInfo?: ApiTeamInfo
-): Team {
-    return {
-        id: name.toLowerCase().replace(/\s+/g, "-"),
-        name: name,
-        shortName: teamInfo?.shortname || name.substring(0, 3).toUpperCase(),
-        code: teamInfo?.shortname || name.substring(0, 3).toUpperCase(),
-        primaryColor: "#1e4d8c", // Default color
-        secondaryColor: "#ffffff",
-        flagUrl: teamInfo?.img,
-    };
-}
-
-/**
- * Transform API series to app Series type
- */
-export function transformSeries(apiSeries: ApiSeries): Series {
-    // Determine format based on match counts
-    let format: MatchFormat = "T20";
-    if (apiSeries.test > 0) format = "TEST";
-    else if (apiSeries.odi > 0) format = "ODI";
-    else if (apiSeries.t20 > 0) format = "T20";
-
-    return {
-        id: apiSeries.id,
-        name: apiSeries.name,
-        startDate: new Date(apiSeries.startDate),
-        endDate: new Date(apiSeries.endDate),
-        format,
-        totalMatches: apiSeries.matches,
-    };
-}
-
-/**
- * Transform scorecard batting entry to BattingStats
- */
-export function transformBattingStats(
-    batting: ApiScorecardBatting,
-    position: number
-): BattingStats {
-    return {
-        playerId: batting.batsman.id,
-        playerName: batting.batsman.name,
-        runs: batting.r,
-        balls: batting.b,
-        fours: batting["4s"],
-        sixes: batting["6s"],
-        strikeRate: batting.sr,
-        isOut: batting.dismissal !== "not out",
-        position,
-    };
-}
-
-/**
- * Transform scorecard bowling entry to BowlingStats
- */
-export function transformBowlingStats(bowling: ApiScorecardBowling): BowlingStats {
-    return {
-        playerId: bowling.bowler.id,
-        playerName: bowling.bowler.name,
-        overs: bowling.o,
-        maidens: bowling.m,
-        runs: bowling.r,
-        wickets: bowling.w,
-        economy: bowling.eco,
-        wides: bowling.wd,
-        noBalls: bowling.nb,
-        dotBalls: 0, // Not provided by API
-    };
-}
-
-/**
- * Transform scorecard innings to app Innings type
- */
-export function transformInnings(
-    innings: ApiScorecardInnings,
-    inningsNumber: number,
-    battingTeamId: string,
-    bowlingTeamId: string
-): Innings {
-    const [runs, wickets] = innings.totals.R.split("/").map(Number);
-    const overs = parseFloat(innings.totals.O) || 0;
-    const balls = Math.round((overs % 1) * 10);
-
-    return {
-        id: `innings-${inningsNumber}`,
-        inningsNumber,
-        battingTeamId,
-        bowlingTeamId,
-        runs: runs || 0,
-        wickets: wickets || 0,
-        overs: Math.floor(overs),
-        balls,
-        runRate: overs > 0 ? Number((runs / overs).toFixed(2)) : 0,
-        extras: {
-            wides: 0,
-            noBalls: 0,
-            byes: innings.extras.b,
-            legByes: 0,
-            penalties: 0,
-            total: innings.extras.r,
-        },
-        batting: innings.batting.map((b, i) => transformBattingStats(b, i + 1)),
-        bowling: innings.bowling.map(transformBowlingStats),
-        fallOfWickets: [],
-        partnerships: [],
-        recentOvers: [],
-        isCompleted: parseInt(innings.totals.W) >= 10,
-    };
-}
-
-/**
- * Batch transform multiple API matches to LiveScoreSummary array
- */
-export function transformMatches(matches: ApiMatch[]): LiveScoreSummary[] {
-    return matches.map(transformToScoreSummary);
-}
-
-/**
- * Separate matches by status
- */
-export function categorizeMatches(matches: LiveScoreSummary[]): {
-    live: LiveScoreSummary[];
-    upcoming: LiveScoreSummary[];
-    completed: LiveScoreSummary[];
-} {
-    const live: LiveScoreSummary[] = [];
-    const upcoming: LiveScoreSummary[] = [];
-    const completed: LiveScoreSummary[] = [];
-
-    for (const match of matches) {
-        if (match.isLive) {
-            live.push(match);
-        } else if (match.status === "UPCOMING") {
-            upcoming.push(match);
-        } else {
-            completed.push(match);
-        }
-    }
-
-    return { live, upcoming, completed };
-}
-/**
- * Transform API match info + scorecard to full Match object
- */
-export function transformToFullMatch(
-    info: ApiMatchInfo | ScorecardResponse["data"],
-    scorecardData?: ApiScorecardInnings[]
-): Match {
-    const team1 = info.teams[0] || "TBD";
-    const team2 = info.teams[1] || "TBD";
-
-    // Find team info
-    const team1Info = info.teamInfo?.find(
-        (t) => t.name.toLowerCase() === team1.toLowerCase()
-    );
-    const team2Info = info.teamInfo?.find(
-        (t) => t.name.toLowerCase() === team2.toLowerCase()
-    );
-
-    // Transform teams
-    const t1 = transformTeam(team1, team1Info);
-    const t2 = transformTeam(team2, team2Info);
-
-    // Transform innings if available
-    const innings: Innings[] = [];
-    if (scorecardData && scorecardData.length > 0) {
-        scorecardData.forEach((inn, index) => {
-            // Determine batting/bowling teams based on inning name
-            let battingTeamId = t1.id;
-            let bowlingTeamId = t2.id;
-
-            if (inn.inning.toLowerCase().includes(team2.toLowerCase())) {
-                battingTeamId = t2.id;
-                bowlingTeamId = t1.id;
-            }
-
-            innings.push(transformInnings(inn, index + 1, battingTeamId, bowlingTeamId));
-        });
-    }
-
-    // Determine current innings
-    const currentInnings = innings.length > 0 ? innings.length : 1;
-
-    // Determine status
-    const matchStarted = info.status !== "Match not started";
-    const matchEnded = info.status.toLowerCase().includes("won") ||
-        info.status.toLowerCase().includes("draw") ||
-        info.status.toLowerCase().includes("tie") ||
-        info.status.toLowerCase().includes("abandoned");
-
-    return {
-        id: info.id,
-        seriesId: "series_id" in info ? info.series_id : undefined,
-        format: transformMatchFormat(info.matchType),
-        status: transformMatchStatus(matchStarted, matchEnded, info.status),
+        status: getStatusFromState(info.state, info.status),
         statusText: info.status,
-        team1: t1,
-        team2: t2,
+        venue: info.venueInfo?.ground || "Unknown Venue",
+        startTime: new Date(Number(info.startDate)),
+        format: parseMatchFormat(info.matchFormat),
+        isLive: info.state.toLowerCase() === "in progress"
+    };
+}
+
+// Transform for Match Detail Page
+export function transformToFullMatch(
+    apiMatch: any,
+    scorecardData: CricbuzzScorecardResponse | null
+): Match | null {
+    if (!apiMatch) return null;
+
+    const info = apiMatch.matchInfo as CricbuzzMatchInfo;
+
+    // Transform Innings if available
+    let innings: Innings[] = [];
+    if (scorecardData && scorecardData.scorecard) {
+        innings = scorecardData.scorecard.map(inng => transformInnings(inng, info));
+    }
+
+    // Map strict Team objects (no scores here)
+    const team1: Team = {
+        id: String(info.team1.teamId),
+        name: info.team1.teamName,
+        shortName: info.team1.teamSName,
+        code: info.team1.teamSName, // using shortName as code
+        primaryColor: "#000", // Default
+        secondaryColor: "#fff",
+        flagUrl: info.team1.imageId ? `https://i.cricdb.com/images/${info.team1.imageId}.jpg` : undefined
+    };
+
+    const team2: Team = {
+        id: String(info.team2.teamId),
+        name: info.team2.teamName,
+        shortName: info.team2.teamSName,
+        code: info.team2.teamSName,
+        primaryColor: "#000",
+        secondaryColor: "#fff",
+        flagUrl: info.team2.imageId ? `https://i.cricdb.com/images/${info.team2.imageId}.jpg` : undefined
+    };
+
+    return {
+        id: String(info.matchId),
+        seriesId: String(info.seriesId),
+        seriesName: info.seriesName || (apiMatch as any).seriesName,
+        matchNumber: 0,
+        format: parseMatchFormat(info.matchFormat),
+        status: getStatusFromState(info.state, info.status),
+        statusText: info.status,
+        team1,
+        team2,
         venue: {
-            id: info.venue,
-            name: info.venue,
-            city: info.venue.split(",").pop()?.trim() || "",
-            country: "",
+            id: String(info.venueInfo?.id || "0"),
+            name: info.venueInfo?.ground || "Unknown Venue",
+            city: info.venueInfo?.city || "",
+            country: info.venueInfo?.country || "",
         },
-        startTime: new Date(info.dateTimeGMT),
+        startTime: new Date(Number(info.startDate)),
+        endTime: new Date(Number(info.endDate)),
         innings,
-        currentInnings,
-        isLive: matchStarted && !matchEnded,
-        lastUpdated: new Date(),
-        // Result fields can be parsed from statusText if needed
+        isLive: info.state.toLowerCase() === "in progress",
+        lastUpdated: new Date()
+    };
+}
+
+export function addScorecardToMatch(match: Match, scorecardData: CricbuzzScorecardResponse): Match {
+    if (!scorecardData || !scorecardData.scorecard) return match;
+
+    // We need to reconstruct minimal match info for transformInnings to work 
+    // (it needs team IDs to map batting/bowling teams)
+    // We can extract IDs from the Match object itself since we mapped them into id fields.
+    const minimalMatchInfo: any = {
+        team1: { teamId: match.team1.id, teamName: match.team1.name },
+        team2: { teamId: match.team2.id, teamName: match.team2.name }
+    };
+
+    const innings = scorecardData.scorecard.map(inng => transformInnings(inng, minimalMatchInfo));
+
+    return {
+        ...match,
+        innings: innings
+    };
+}
+
+function transformInnings(inng: CricbuzzInnings, matchInfo: CricbuzzMatchInfo): Innings {
+    const isTeam1 = inng.inningsId === 1 || inng.inningsId === 3;
+    const battingTeamId = isTeam1 ? String(matchInfo.team1.teamId) : String(matchInfo.team2.teamId);
+    const bowlingTeamId = isTeam1 ? String(matchInfo.team2.teamId) : String(matchInfo.team1.teamId);
+
+    return {
+        id: String(inng.inningsId),
+        inningsNumber: inng.inningsId,
+        battingTeamId: battingTeamId,
+        bowlingTeamId: bowlingTeamId,
+        runs: safeParseInt(inng.scoreDetails?.runs),
+        wickets: safeParseInt(inng.scoreDetails?.wickets),
+        overs: safeParseFloat(inng.scoreDetails?.overs), // number in type
+        balls: 0, // would need calculation from overs
+        runRate: safeParseFloat(inng.scoreDetails?.runRate), // Assuming API provides this or calculate? Check API type.
+        // Assuming API might not provide runRate in `scoreDetails` wrapper seen so far, defaulting 0
+        extras: {
+            wides: inng.extras?.wides || 0,
+            noBalls: inng.extras?.noBalls || 0,
+            byes: inng.extras?.byes || 0,
+            legByes: inng.extras?.legByes || 0,
+            penalties: 0,
+            total: inng.extras?.total || 0
+        },
+        batting: (inng.batsman || []).map(b => transformBattingStats(b)),
+        bowling: (inng.bowler || []).map(b => transformBowlingStats(b)),
+        fallOfWickets: [], // Populate if API provides FOW array
+        partnerships: [],  // Populate if API provides keys
+        recentOvers: [],   // Populate if API provides keys
+        isCompleted: false
+    };
+}
+
+function transformBattingStats(b: CricbuzzBatsman): BattingStats {
+    // If 'isOut' is boolean in types but derived from 'outdec' string
+    const isOut = !!b.outdec;
+
+    return {
+        playerId: String(b.id),
+        playerName: b.name,
+        runs: safeParseInt(b.runs),
+        balls: safeParseInt(b.balls),
+        fours: safeParseInt(b.fours),
+        sixes: safeParseInt(b.sixes),
+        strikeRate: safeParseFloat(b.strkrate),
+        isOut: isOut,
+        dismissedBy: b.outdec || undefined, // Mapping 'outdec' string here
+        position: 0 // Not provided in basic stats
+    };
+}
+
+function transformBowlingStats(b: CricbuzzBowler): BowlingStats {
+    return {
+        playerId: String(b.id),
+        playerName: b.name,
+        overs: safeParseFloat(b.overs),
+        maidens: safeParseInt(b.maidens),
+        runs: safeParseInt(b.runs),
+        wickets: safeParseInt(b.wickets),
+        economy: safeParseFloat(b.economy),
+        wides: safeParseInt(b.wides),
+        noBalls: safeParseInt(b.no_balls),
+        dotBalls: 0 // Not usually provided directly in summary
+    };
+}
+
+export function transformSeries(s: any): Series {
+    return {
+        id: String(s.id),
+        name: s.name,
+        startDate: new Date(),
+        endDate: new Date(),
+        format: "ODI", // placeholder
+        totalMatches: 0
+    };
+}
+
+export function transformPlayer(p: any): Player {
+    return {
+        id: String(p.id),
+        name: p.name,
+        shortName: p.name, // simplification
+        country: p.country,
+        role: "BATSMAN", // placeholder
+        battingStyle: "RIGHT_HAND", // placeholder
+        imageUrl: p.image
     };
 }

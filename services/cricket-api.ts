@@ -1,150 +1,147 @@
-// Cricket API Service
-// Using CricketData.org (CricAPI) - https://cricketdata.org
 
-import type {
-    CurrentMatchesResponse,
-    MatchInfoResponse,
-    ScorecardResponse,
-    SeriesResponse,
-    PlayerInfoResponse,
-    ApiErrorResponse,
-} from "@/types/api";
+// Cricbuzz API Service (RapidAPI)
+import { LiveScoreSummary, Match, Series, Innings, BattingStats, BowlingStats, Player } from "@/types";
+import { transformToLiveScoreSummary, transformToFullMatch } from "./transformers";
+import { CricbuzzLiveResponse, CricbuzzScorecardResponse, CricbuzzMatchInfo } from "@/types/cricbuzz";
 
-const CRICAPI_BASE_URL = process.env.CRICAPI_BASE_URL || "https://api.cricapi.com/v1";
-const CRICAPI_KEY = process.env.CRICAPI_KEY || "";
+const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
+const RAPIDAPI_HOST = process.env.RAPIDAPI_HOST || "cricbuzz-cricket.p.rapidapi.com";
+const BASE_URL = `https://${RAPIDAPI_HOST}`;
 
-// Custom error class for API errors
-export class CricApiError extends Error {
-    constructor(
-        message: string,
-        public statusCode?: number,
-        public reason?: string
-    ) {
-        super(message);
-        this.name = "CricApiError";
-    }
-}
+// Cache for match list
+let matchCache: { data: any[], timestamp: number } | null = null;
+const CACHE_TTL = 30 * 1000; // 30 seconds
 
-// Generic fetch function with error handling
-async function fetchFromApi<T>(
-    endpoint: string,
-    params: Record<string, string> = {}
-): Promise<T> {
-    if (!CRICAPI_KEY) {
-        throw new CricApiError(
-            "API key not configured. Please set CRICAPI_KEY environment variable."
-        );
+async function fetchAPI<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
+    if (!RAPIDAPI_KEY) {
+        throw new Error("RAPIDAPI_KEY is not defined");
     }
 
-    const searchParams = new URLSearchParams({
-        apikey: CRICAPI_KEY,
-        ...params,
+    const url = new URL(`${BASE_URL}/${endpoint}`);
+    Object.keys(params).forEach((key) => url.searchParams.append(key, params[key]));
+
+    const response = await fetch(url.toString(), {
+        headers: {
+            "x-rapidapi-key": RAPIDAPI_KEY,
+            "x-rapidapi-host": RAPIDAPI_HOST,
+        },
+        next: { revalidate: 30 },
     });
 
-    const url = `${CRICAPI_BASE_URL}${endpoint}?${searchParams.toString()}`;
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`API Error (${response.status}):`, errorText);
+        throw new Error(`API Error: ${response.statusText}`);
+    }
 
+    return response.json();
+}
+
+/**
+ * Fetch Live & Recent Matches from Cricbuzz
+ */
+export async function fetchCurrentMatches(): Promise<LiveScoreSummary[]> {
     try {
-        const response = await fetch(url, {
-            next: { revalidate: 30 }, // Cache for 30 seconds
-        });
+        const data = await fetchAPI<CricbuzzLiveResponse>("matches/v1/live");
 
-        if (!response.ok) {
-            throw new CricApiError(
-                `API request failed: ${response.statusText}`,
-                response.status
-            );
+        // Flatten the nested structure
+        const matches: any[] = [];
+        if (data?.typeMatches) {
+            data.typeMatches.forEach(type => {
+                type.seriesMatches?.forEach(series => {
+                    const seriesMatches = series.seriesAdWrapper?.matches;
+                    if (seriesMatches) {
+                        seriesMatches.forEach(m => {
+                            // Attach series name to match info for easier access
+                            if (m.matchInfo) {
+                                (m.matchInfo as any).seriesName = series.seriesAdWrapper?.seriesName;
+                            }
+                            matches.push(m);
+                        });
+                    }
+                });
+            });
         }
 
-        const data = await response.json();
+        // Update simple cache
+        matchCache = { data: matches, timestamp: Date.now() };
 
-        // Check for API-level errors
-        if (data.status === "failure") {
-            throw new CricApiError(
-                (data as ApiErrorResponse).reason || "API request failed",
-                undefined,
-                (data as ApiErrorResponse).reason
-            );
-        }
-
-        return data as T;
+        return matches.map(m => transformToLiveScoreSummary(m));
     } catch (error) {
-        if (error instanceof CricApiError) {
-            throw error;
+        console.error("Error fetching current matches:", error);
+        return [];
+    }
+}
+
+/**
+ * Fetch Match Info
+ * Since `matches/get-info` is unreliable, we check our live/recent cache
+ * or try to fetch the live list if cache is stale.
+ */
+export async function fetchMatchInfo(matchId: string): Promise<Match | null> {
+    // 1. Try to find basic info in our cache or fetch list
+    let basicMatchData = null;
+
+    // Check cache first
+    if (matchCache && (Date.now() - matchCache.timestamp < CACHE_TTL)) {
+        basicMatchData = matchCache.data.find((m: any) => String(m.matchInfo?.matchId) === matchId);
+    }
+
+    if (!basicMatchData) {
+        try {
+            const data = await fetchAPI<CricbuzzLiveResponse>("matches/v1/live");
+            // Quick parse to find match
+            if (data?.typeMatches) {
+                for (const type of data.typeMatches) {
+                    if (basicMatchData) break;
+                    for (const series of type.seriesMatches || []) {
+                        if (basicMatchData) break;
+                        for (const m of series.seriesAdWrapper?.matches || []) {
+                            if (String(m.matchInfo?.matchId) === matchId) {
+                                basicMatchData = m;
+                                if (m.matchInfo) (m.matchInfo as any).seriesName = series.seriesAdWrapper?.seriesName;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Error fetching live list for fallback:", e);
         }
-        throw new CricApiError(
-            `Failed to fetch from Cricket API: ${error instanceof Error ? error.message : "Unknown error"}`
-        );
     }
+
+    // If we have basic data, we can start transforming to a Match object
+    // Note: The caller usually merges this with scorecard data. 
+    // If we return null here, the `getMatchDetails` action might fail or return just scorecard data?
+    // We should return what we have.
+
+    if (!basicMatchData) return null;
+
+    // Transform basic data to Match (without innings first)
+    // The scorecard call will fill in the innings.
+    // We can use transformToFullMatch but might need to adjust it to handle missing innings.
+    return transformToFullMatch(basicMatchData, null);
 }
 
 /**
- * Fetch current/live matches
- * Returns all ongoing and recently completed matches
+ * Fetch Scorecard
  */
-export async function fetchCurrentMatches(): Promise<CurrentMatchesResponse> {
-    return fetchFromApi<CurrentMatchesResponse>("/currentMatches");
-}
-
-/**
- * Fetch detailed match information
- * @param matchId - The match ID
- */
-export async function fetchMatchInfo(
-    matchId: string
-): Promise<MatchInfoResponse> {
-    return fetchFromApi<MatchInfoResponse>("/match_info", { id: matchId });
-}
-
-/**
- * Fetch match scorecard
- * @param matchId - The match ID
- */
-export async function fetchMatchScorecard(
-    matchId: string
-): Promise<ScorecardResponse> {
-    return fetchFromApi<ScorecardResponse>("/match_scorecard", { id: matchId });
-}
-
-/**
- * Fetch all cricket series
- * @param offset - Pagination offset (optional)
- */
-export async function fetchSeries(offset?: number): Promise<SeriesResponse> {
-    const params: Record<string, string> = {};
-    if (offset !== undefined) {
-        params.offset = offset.toString();
-    }
-    return fetchFromApi<SeriesResponse>("/series", params);
-}
-
-/**
- * Fetch player information
- * @param playerId - The player ID
- */
-export async function fetchPlayerInfo(
-    playerId: string
-): Promise<PlayerInfoResponse> {
-    return fetchFromApi<PlayerInfoResponse>("/players_info", { id: playerId });
-}
-
-/**
- * Check API status and remaining credits
- */
-export async function checkApiStatus(): Promise<{
-    hitsToday: number;
-    hitsLimit: number;
-    remaining: number;
-}> {
+export async function fetchMatchScorecard(matchId: string): Promise<CricbuzzScorecardResponse | null> {
     try {
-        const response = await fetchCurrentMatches();
-        return {
-            hitsToday: response.info.hitsToday,
-            hitsLimit: response.info.hitsLimit,
-            remaining: response.info.hitsLimit - response.info.hitsToday,
-        };
+        const data = await fetchAPI<CricbuzzScorecardResponse>(`mcenter/v1/${matchId}/hscard`);
+        return data;
     } catch (error) {
-        throw new CricApiError(
-            `Failed to check API status: ${error instanceof Error ? error.message : "Unknown error"}`
-        );
+        console.error(`Error fetching scorecard for ${matchId}:`, error);
+        return null;
     }
+}
+
+export async function fetchSeries(): Promise<Series[]> {
+    // Placeholder - Cricbuzz series endpoint not inspected yet
+    return [];
+}
+
+export async function fetchPlayerInfo(id: string): Promise<Player | null> {
+    return null; // Not implemented yet
 }
