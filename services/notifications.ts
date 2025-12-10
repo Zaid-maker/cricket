@@ -1,16 +1,50 @@
 import { LiveScoreSummary } from "@/types";
+import { query } from "@/lib/db";
 
-// In-memory state to track sent notifications (prevents spam)
-// We use globalThis to persist across hot reloads in dev
-declare global {
-    var _notificationState: Set<string> | undefined;
+// Table initialization
+async function ensureTableExists() {
+    const createTableQuery = `
+        CREATE TABLE IF NOT EXISTS notified_matches (
+            match_id VARCHAR(255) PRIMARY KEY,
+            notified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            notification_type VARCHAR(50) DEFAULT 'START'
+        );
+    `;
+    try {
+        await query(createTableQuery);
+    } catch (error) {
+        console.error("Failed to ensure notification table exists:", error);
+    }
 }
 
-if (!globalThis._notificationState) {
-    globalThis._notificationState = new Set<string>();
+// Ensure table exists on module load (fire and forget)
+ensureTableExists();
+
+// Helper to check if notified
+async function hasNotified(matchId: string, type: 'start' | 'end'): Promise<boolean> {
+    const id = `${type}-${matchId}`;
+    try {
+        const result = await query("SELECT 1 FROM notified_matches WHERE match_id = $1", [id]);
+        return (result.rowCount ?? 0) > 0;
+    } catch (e) {
+        console.error("DB Check Failed:", e);
+        return false;
+    }
 }
 
-const NOTIFIED_MATCHES = globalThis._notificationState!;
+// Helper to save notification
+async function markAsNotified(matchId: string, type: 'start' | 'end') {
+    const id = `${type}-${matchId}`;
+    try {
+        await query(
+            "INSERT INTO notified_matches (match_id, notification_type) VALUES ($1, $2) ON CONFLICT (match_id) DO NOTHING",
+            [id, type.toUpperCase()]
+        );
+    } catch (e) {
+        console.error("DB Save Failed:", e);
+    }
+}
+
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
 interface DiscordEmbed {
@@ -24,7 +58,6 @@ interface DiscordEmbed {
 
 export async function sendDiscordWebhook(embed: DiscordEmbed) {
     if (!DISCORD_WEBHOOK_URL) {
-        console.warn("DISCORD_WEBHOOK_URL is not set. Notification skipped.");
         return;
     }
 
@@ -49,9 +82,9 @@ export async function checkAndNotify(matches: LiveScoreSummary[]) {
 
         // Notify on Match Start
         if (status === "live" || status === "in progress") {
-            const notificationKey = `start-${matchId}`;
+            const alreadyNotified = await hasNotified(matchId, 'start');
 
-            if (!NOTIFIED_MATCHES.has(notificationKey)) {
+            if (!alreadyNotified) {
                 await sendDiscordWebhook({
                     title: "🏏 Match Started!",
                     description: `**${match.team1.name}** vs **${match.team2.name}** is now live!`,
@@ -63,26 +96,25 @@ export async function checkAndNotify(matches: LiveScoreSummary[]) {
                     ],
                     timestamp: new Date().toISOString()
                 });
-                NOTIFIED_MATCHES.add(notificationKey);
+                await markAsNotified(matchId, 'start');
             }
         }
 
         // Notify on Match Complete
         if (status === "completed" || status === "result") {
-            const notificationKey = `end - ${matchId} `;
+            const alreadyNotified = await hasNotified(matchId, 'end');
 
-            if (!NOTIFIED_MATCHES.has(notificationKey)) {
-                // Only send completion if we haven't already
+            if (!alreadyNotified) {
                 await sendDiscordWebhook({
                     title: "🏁 Match Ended",
-                    description: `** ${match.team1.name}** vs ** ${match.team2.name}** has finished.`,
+                    description: `**${match.team1.name}** vs **${match.team2.name}** has finished.`,
                     color: 0xf87171, // Red
                     fields: [
                         { name: "Status", value: match.statusText, inline: false }
                     ],
                     timestamp: new Date().toISOString()
                 });
-                NOTIFIED_MATCHES.add(notificationKey);
+                await markAsNotified(matchId, 'end');
             }
         }
     }
