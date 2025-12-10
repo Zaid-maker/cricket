@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Calendar, MapPin, Users, Trophy, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin, Users, Trophy, Loader2, RefreshCw, ExternalLink } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -226,7 +226,15 @@ export default function MatchDetailPage() {
                                 <MapPin className="h-5 w-5 shrink-0 text-muted-foreground" />
                                 <div>
                                     <p className="text-sm font-medium">Venue</p>
-                                    <p className="text-sm text-muted-foreground">{match.venue.name}</p>
+                                    <a
+                                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(match.venue.name)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-sm text-primary hover:underline flex items-center gap-1"
+                                    >
+                                        {match.venue.name}
+                                        <ExternalLink className="h-3 w-3" />
+                                    </a>
                                 </div>
                             </div>
 
